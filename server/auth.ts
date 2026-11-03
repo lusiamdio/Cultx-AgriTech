@@ -23,20 +23,27 @@ const bearerToken = (request: Request) => {
 export const requireAuth: RequestHandler = async (request, response, next) => {
   const config = configuration();
   const token = bearerToken(request);
-  if (!config) return sendError(response, 503, "AUTH_UNAVAILABLE", "Authentication is not configured.");
   if (!token) return sendError(response, 401, "UNAUTHENTICATED", "A bearer token is required.");
+  if (!config) return sendError(response, 503, "AUTH_UNAVAILABLE", "Authentication is not configured.");
+  if (token.length > 8192 || /\s/.test(token)) return sendError(response, 401, "UNAUTHENTICATED", "The access token is invalid.");
 
   try {
     const userResponse = await fetch(`${config.url}/auth/v1/user`, {
       headers: { apikey: config.key, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+      redirect: "error",
     });
-    if (!userResponse.ok) return sendError(response, 401, "UNAUTHENTICATED", "The access token is invalid or expired.");
+    if (userResponse.status === 401 || userResponse.status === 403) return sendError(response, 401, "UNAUTHENTICATED", "The access token is invalid or expired.");
+    if (!userResponse.ok) return sendError(response, 503, "AUTH_UNAVAILABLE", "Authentication could not be verified.");
     const user = await userResponse.json() as { id?: string; email?: string };
     if (!user.id) return sendError(response, 401, "UNAUTHENTICATED", "The access token is invalid.");
 
     const profileResponse = await fetch(`${config.url}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role`, {
       headers: { apikey: config.key, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+      redirect: "error",
     });
+    if (profileResponse.status >= 500 || profileResponse.status === 429) return sendError(response, 503, "AUTH_UNAVAILABLE", "Authentication could not be verified.");
     if (!profileResponse.ok) return sendError(response, 403, "PROFILE_UNAVAILABLE", "An authorized profile is required.");
     const profiles = await profileResponse.json() as Array<{ role?: string }>;
     const role = profiles[0]?.role;

@@ -40,20 +40,8 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'cultx-api-cache',
-                expiration: {
-                  maxEntries: 120,
-                  maxAgeSeconds: 24 * 60 * 60 // 24 hours
-                },
-                networkTimeoutSeconds: 3
-              }
-            }
-          ]
+          // Never cache authenticated API responses across browser sessions.
+          runtimeCaching: []
         }
       })
     ],
